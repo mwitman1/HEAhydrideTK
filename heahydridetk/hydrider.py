@@ -11,6 +11,8 @@ from ase import neighborlist
 from ase.io import read, write
 from ase.build import make_supercell
 
+BCC_sites = [[0, 0, 0],[.50,.50,.50]]
+FCC_sites = [[0,0,0],[.50,.50,0],[.50,0,.50],[0,0.5,0.5]]
 
 # https://www.tf.uni-kiel.de/matwis/amat/def_en/kap_1/illustr/t1_3_3.html
 # c = up, a/b = right/intopage
@@ -18,6 +20,7 @@ BCC_octahedrons = [[  0,.50,  0],[.50,  0,  0],
                    [  0,.50,.50],[.50,  0,.50],
                    [.50,.50,  0],[  0,  0,.50]]
 #BCC_octahedrons = [[  0,.50,.50],[.50,  0,.50],[.50,.50,0]]
+
 FCC_octahedrons = [[0,0.5,0],[0.5,0,0],
                    [0.5,0.5,0.5], [0,0,0.5]]
 

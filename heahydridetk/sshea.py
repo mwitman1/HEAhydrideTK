@@ -34,7 +34,7 @@ class SSHEA(object):
             
         # Store composition information
         self.compstr = comp
-        self.comp = pym.Composition(comp)
+        self.comp = pym.core.Composition(comp)
         self.eldict = self.comp.get_el_amt_dict()
 
         # file types to output
@@ -46,7 +46,7 @@ class SSHEA(object):
         # Assign the desiree interatomic distance 
         if radius == 0.0:
             # get largest atomic radius in composition
-            Rs = [pym.Element(el).atomic_radius for el in self.eldict.keys()]
+            Rs = [pym.core.Element(el).atomic_radius for el in self.eldict.keys()]
             Reff = np.max(Rs)*scale
         else:
             Reff = radius*scale
@@ -64,8 +64,8 @@ class SSHEA(object):
         np.random.seed(seed)
 
         # For now only deal with building cubic cells
-        self.struct = bulk("Cu", self.latticetype, a=self.latticevector)#, 
-                           #cubic=True)
+        self.struct = bulk("Cu", self.latticetype, a=self.latticevector,
+                           cubic=True)
 
         # Obtain the required supercell replication
         initnum = len(self.struct)
@@ -144,14 +144,14 @@ class SSHEA(object):
 
         basename=None
         if write:
-            basename = self.write_output(self.outformats, seed, tag)
+            basename = self.write_output(self.outformats, self.latticetype, seed, tag)
 
         return self.struct, basename
 
 
-    def write_output(self, outformats, seed, tag):
+    def write_output(self, outformats, latticetype, seed, tag):
 
-        basename = self.compstr+'_rep%dx%dx%d_s%s'%(*self.finalreps,str(seed))
+        basename = self.compstr+'_%s_rep%dx%dx%d_s%s'%(latticetype, *self.finalreps, str(seed))
 
         if tag != None:
             basename += '_tag%s'%(tag)
