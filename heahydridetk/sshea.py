@@ -1,24 +1,26 @@
 import argparse
 import numpy as np
 from iteround import saferound
+import os
 
 from ase.build import bulk, make_supercell
 from ase.io import read, write
 
 import pymatgen as pym
 
+
 class SSHEA(object):
     """ A class for generating Solid Solution-High Entropy Alloys (SS-HEAs)"""
 
-    def __init__(self, comp, latticetype, numatoms = 100, radius = 0, 
+    def __init__(self, comp, latticetype, reps = (2,2,2), radius = 0, 
                  scale = 1, seed=None, tag=None, outformats = ['cif']):
         """Prepare the desired lattice/compositional attributes of the SS-HEA
 
         Args:
             comp (str): A string of the alloy composition
             latticetype (str): either "fcc" or "bcc"
-            numatoms (int): create the smallest supercell with at
-                            least this many number of atoms
+            reps : (tuple(int,int,int): number of basic bcc (2 atoms) or fcc(4 atoms) 
+                                          unit cell replications
             radius (float): radius of the largest element (default = 0.0
                             and will automatically be computed)
             scale (float): scaling factor for setting the nearest neighbor
@@ -41,7 +43,7 @@ class SSHEA(object):
         self.outformats = outformats
    
         # minimum number of atoms in unit cell
-        self.numatoms = numatoms 
+        #self.numatoms = numatoms 
        
         # Assign the desiree interatomic distance 
         if radius == 0.0:
@@ -68,24 +70,24 @@ class SSHEA(object):
                            cubic=True)
 
         # Obtain the required supercell replication
-        initnum = len(self.struct)
-        numreps = int(np.ceil(self.numatoms/initnum))
-        finalrep1 = int(np.ceil(numreps**(1/3)))
-        if finalrep1*(finalrep1-1)**2 > numreps:
-            finalrep2 = finalrep1-1
-            finalrep3 = finalrep1-1
-        elif finalrep1**2*(finalrep1-1) > numreps:
-            finalrep2 = finalrep1
-            finalrep3 = finalrep1-1
-        else:
-            finalrep2 = finalrep1
-            finalrep3 = finalrep1
-        self.finalreps = [finalrep1, finalrep2, finalrep3]
+        #initnum = len(self.struct)
+        #numreps = int(np.ceil(self.numatoms/initnum))
+        #finalrep1 = int(np.ceil(numreps**(1/3)))
+        #if finalrep1*(finalrep1-1)**2 > numreps:
+        #    finalrep2 = finalrep1-1
+        #    finalrep3 = finalrep1-1
+        #elif finalrep1**2*(finalrep1-1) > numreps:
+        #    finalrep2 = finalrep1
+        #    finalrep3 = finalrep1-1
+        #else:
+        #    finalrep2 = finalrep1
+        #    finalrep3 = finalrep1
+        self.finalreps = reps
 
         # create supercell
         self.struct = make_supercell(self.struct, np.diagflat(self.finalreps))
 
-    def generate_new_structure(self, seed=0, tag=None, write=True):
+    def generate_new_structure(self, path='.', seed=0, tag=None, write=True):
         """ Generate the SS-HEA and write corresponding simulation files
 
         Uses the random seed (for reproducability) to permute the atom indices
@@ -144,12 +146,12 @@ class SSHEA(object):
 
         basename=None
         if write:
-            basename = self.write_output(self.outformats, self.latticetype, seed, tag)
+            basename = self.write_output(self.outformats, self.latticetype, seed, tag, path)
 
         return self.struct, basename
 
 
-    def write_output(self, outformats, latticetype, seed, tag):
+    def write_output(self, outformats, latticetype, seed, tag, path):
 
         basename = self.compstr+'_%s_rep%dx%dx%d_s%s'%(latticetype, *self.finalreps, str(seed))
 
@@ -157,7 +159,7 @@ class SSHEA(object):
             basename += '_tag%s'%(tag)
 
         for form in outformats:
-            print("Writing file to: %s.%s"%(basename,form))
-            write('%s.%s'%(basename,form),self.struct,format=form)
+            #print("Writing file to: ", os.path.join(path, "%s.%s"%(basename,form)))
+            write(os.path.join(path,'%s.%s'%(basename,form)),self.struct,format=form)
 
         return basename

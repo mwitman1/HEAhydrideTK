@@ -105,8 +105,29 @@ def enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, alldistances, all
     return summarystr, data
 
 
-def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,
+def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,writerandom=(0,0,0,0),
              mindistance=2.1):
+
+    """
+    cifname : str
+        path to cif file for hydriding
+    lattice_type : str
+        for now, bcc or fcc lattice
+    supercell : tuple(int, int, int)
+        number of replications of the primitive fcc or bcc cubic cell
+    witeall : bool
+        load every interstitial with hydrgoen
+    writesequential : bool
+        load octahedral intersitials sequentially subject to H-H distance < mindistance
+        then while H/M < 2, load tetrahedral sites sequentially 
+    writerandom : tuple(float1, float2, int3, int4)
+        float1 : fraction of octahedral holes to randomly fill
+        float2 : fraction of tetrahedral holes to randomly fill
+        int3 : number of random structures to write
+        int4 : seed for random cfgs
+    mindistance : float
+        mindistance is minimum allowable distance for H-H in the lattice 
+    """
 
     lattice_type = lattice_type.upper()
  
@@ -262,6 +283,27 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,
                 write(savename,struct+allcombinedsuper[placed_ind])
 
         print("H/M = %.1f after filling octahedral holes"%(numplaced/len(struct)))
+
+    if np.sum(writerandom) != 0:
+        numHocta = np.int(writerandom[0]*len(indocto))
+        numHtetra = np.int(writerandom[1]*len(indtetra))
+
+        np.random.seed(writerandom[3])
+
+        octositesuper.set_atomic_numbers([1 for _ in range(len(octositesuper))])
+        tetrasitesuper.set_atomic_numbers([1 for _ in range(len(tetrasitesuper))])
+
+        for i in range(writerandom[2]):
+            savename = structname+'_N%d-i%d_R%.4f-%.4f-%d-%d.cif'%(numHocta+numHtetra,i,
+                                                                    writerandom[0],
+                                                                    writerandom[1],
+                                                                    writerandom[2],
+                                                                    writerandom[3])
+            write(savename, struct + \
+                            octositesuper[np.random.choice(len(octositesuper),numHocta)]+\
+                            tetrasitesuper[np.random.choice(len(tetrasitesuper),numHtetra)])
+
+
 
     
 
