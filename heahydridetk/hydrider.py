@@ -2,9 +2,11 @@
 import numpy as np
 import argparse
 import itertools
+import os
 
 from pymatgen.core.periodic_table import Element
 from pprint import pprint
+from copy import deepcopy
 
 import ase
 from ase import neighborlist
@@ -106,7 +108,7 @@ def enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, alldistances, all
 
 
 def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,writerandom=(0,0,0,0),
-             mindistance=2.1):
+             writeallrandom=0,towrite=True, mindistance=2.1,asestruct=None,path='.',seed=0):
 
     """
     cifname : str
@@ -134,8 +136,17 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
     structname = cifname.split('.cif')[0]
     interstitialsname = structname+'.interstitials'
 
-    struct = read(cifname) 
-    structcell = struct.cell.cellpar()
+    if asestruct == None:
+        struct = read(cifname) 
+        structcell = struct.cell.cellpar()
+    else:
+        # can directly pass in asestruct 
+        struct = asestruct
+        structcell = struct.cell.cellpar()
+
+    if seed:
+        np.random.seed(seed)
+        
 
     basecell=(structcell[0]/supercell[0],
               structcell[1]/supercell[1],
@@ -181,9 +192,6 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
     else:
         raise ValueError("%s not supported, only BCC or FCC"%lattice_type)
 
-    
-    alldistances = allcombinedsuper.get_all_distances(mic=True)
-    allpos = allcombinedsuper.get_positions()
 
     # get the indices of the interstitials in the ase.Atoms array
     indocto = np.array([i for i in range(len(allcombinedsuper))\
@@ -195,37 +203,57 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
                          if allcombinedsuper[i].symbol!='X' and allcombinedsuper[i].symbol!='Y'])
     indall = np.array([i for i in range(len(allcombinedsuper))])
 
+    
+    allcombinedsuperHs = deepcopy(allcombinedsuper)
+    newatomicnumbers = allcombinedsuper.get_atomic_numbers() 
+    newatomicnumbers[np.concatenate((indocto,indtetra))]=1
+    allcombinedsuperHs.set_atomic_numbers(newatomicnumbers)
 
-    f = open(interstitialsname,"w")
 
-    alldata = []
-    f.write("Isite_ind Isite_type At1 At2 At3 At4 At5 At6 Isite_x Isite_y Isite_z mean_X std_X mean_Rad std_Rad\n") 
-    for i in indocto:
-        N=6
-        summarystr,data = enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, 
-                                             alldistances, allpos, debug=False)
-        alldata.append(data)
-        allcombinedsuper[i].position = data[3:6]
-        allcombinedsuper[i].symbol = 'H'
-        f.write(summarystr)
-        
-    for i in indtetra:
-        N=4
-        summarystr,data = enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, 
-                                             alldistances, allpos, debug=False)
-        alldata.append(data)
-        allcombinedsuper[i].position = data[3:6]
-        allcombinedsuper[i].symbol = 'H'
-        f.write(summarystr)
-        
-    f.close() 
-
+    # write a hydrogen at each interstitial
     if writeall:
         savename = structname+'_allH.cif'
+        finalstruct = allcombinedsuperHs
         print("Saving structure with hydrogens at all interstices to: %s"%savename)
-        write(savename,allcombinedsuper) 
+        if towrite:
+            write(os.path.join(path,savename),finalstruct) 
 
+    # number of randomn hydrogens to insert agnostic to interstitial type
+    if writeallrandom:
+        # get random sampling of 
+        chosen = np.random.choice(len(allsitesuper), writeallrandom, replace=False)
+        finalstruct = struct+allcombinedsuperHs[chosen]
+        if towrite:
+            write(os.path.join(path,savename),finalstruct) 
+    else:
+        finalstruct = struct
+
+    # sequentially fill interstitials octahedral, then tetrahedral
     if writesequential:
+        #f = open(interstitialsname,"w")
+        alldistances = allcombinedsuper.get_all_distances(mic=True)
+        allpos = allcombinedsuper.get_positions()
+        alldata = []
+        #f.write("Isite_ind Isite_type At1 At2 At3 At4 At5 At6 Isite_x Isite_y Isite_z mean_X std_X mean_Rad std_Rad\n") 
+        for i in indocto:
+            N=6
+            summarystr,data = enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, 
+                                                 alldistances, allpos, debug=False)
+            alldata.append(data)
+            allcombinedsuper[i].position = data[3:6]
+            allcombinedsuper[i].symbol = 'H'
+            #f.write(summarystr)
+            
+        for i in indtetra:
+            N=4
+            summarystr,data = enumerate_Nth_polyhedra(i, N, indstruct, allcombinedsuper, 
+                                                 alldistances, allpos, debug=False)
+            alldata.append(data)
+            allcombinedsuper[i].position = data[3:6]
+            allcombinedsuper[i].symbol = 'H'
+            #f.write(summarystr)
+        #f.close() 
+
         alldata.sort(key=lambda x: x[6])
 
         numplaced = 0
@@ -257,7 +285,9 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
             if numplaced%2 == 0 and added:
                 savename = structname+'_N%d_mind%.1f.cif'%(numplaced,mindistance)
                 print("Saving sequentially added H structure: %s"%savename)
-                write(savename,struct+allcombinedsuper[placed_ind])
+                finalstruct = struct+allcombinedsuper[placed_ind]
+                if towrite:
+                    write(os.path.join(path,savename),finalstruct)
 
         print("H/M = %.1f after filling tetrahedral holes"%(numplaced/len(struct)))
 
@@ -270,7 +300,6 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
                 thisind = alldata[i][0]
                 dist_to_placed = alldistances[thisind,np.array(placed_ind)]
 
-
                 if np.min(dist_to_placed) > mindistance:
                     placed_ind.append(thisind)
                     placed_sortedind.append(i)
@@ -280,58 +309,37 @@ def hydrider(cifname, lattice_type, supercell, writeall=0, writesequential=0,wri
             if numplaced%2 == 0 and added:
                 savename = structname+'_N%d_mind%.1f.cif'%(numplaced,mindistance)
                 print("Saving sequentially added H structure: %s"%savename)
-                write(savename,struct+allcombinedsuper[placed_ind])
+                finalstruct = struct+allcombinedsuper[placed_ind]
+                if towrite:
+                    write(os.path.join(path,savename),finalstruct)
 
         print("H/M = %.1f after filling octahedral holes"%(numplaced/len(struct)))
 
+
+    # write random hydrogens with specific proportions in octa vs tetrahedral holes
     if np.sum(writerandom) != 0:
-        numHocta = np.int(writerandom[0]*len(indocto))
-        numHtetra = np.int(writerandom[1]*len(indtetra))
+        numHocta = int(writerandom[0]*len(indocto))
+        numHtetra = int(writerandom[1]*len(indtetra))
 
         np.random.seed(writerandom[3])
 
-        octositesuper.set_atomic_numbers([1 for _ in range(len(octositesuper))])
-        tetrasitesuper.set_atomic_numbers([1 for _ in range(len(tetrasitesuper))])
+        octositeHs = deepcopy(octositesuper)
+        tetrasiteHs = deepcopy(tetrasitesuper)
+
+        octositeHs.set_atomic_numbers([1 for _ in range(len(octositeHs))])
+        tetrasiteHs.set_atomic_numbers([1 for _ in range(len(tetrasiteHs))])
 
         for i in range(writerandom[2]):
-            savename = structname+'_N%d-i%d_R%.4f-%.4f-%d-%d.cif'%(numHocta+numHtetra,i,
+            savename = structname+'_N%d-i%d_R%.4f-%.4f-%d.cif'%(numHocta+numHtetra,i,
                                                                     writerandom[0],
                                                                     writerandom[1],
-                                                                    writerandom[2],
                                                                     writerandom[3])
-            write(savename, struct + \
-                            octositesuper[np.random.choice(len(octositesuper),numHocta)]+\
-                            tetrasitesuper[np.random.choice(len(tetrasitesuper),numHtetra)])
 
+            finalstruct = struct + \
+                          octositeHs[np.random.choice(len(octositeHs),numHocta,replace=False)]+\
+                          tetrasiteHs[np.random.choice(len(tetrasiteHs),numHtetra,replace=False)]
 
+            if towrite:
+                write(os.path.join(path,savename), finalstruct)
 
-    
-
-#if __name__=="__main__":
-#
-#    # must provide:
-#    # 1. Structure file name
-#    # 2. Lattice type (FCC or BCC, but MUST be cubic representation
-#    # 3. Number of replications of the simple cubic cell
-#    # 4. Write all possible H sites
-#    # 5. Write sequentially H sites (starting with trahedral) filling sites 
-#    #    of increasing electronegativity if the new site is more than mindistance
-#    #    from an H that's already been placed 
-#
-#    parser = argparse.ArgumentParser()
-#    parser.add_argument("-cifname", type=str, 
-#                        help="filename of BCC or FCC lattice to find "+\
-#                             "octahedral/tetrahedral sites" )
-#    parser.add_argument("-lattice_type",type=str, help="FCC or BCC")
-#    parser.add_argument("-supercell",type=int,nargs=3,
-#                        help="how many replications of the basic cubic structure")
-#    parser.add_argument("--writeall",type=int,default=0, 
-#                        help="Number of hydrogens per metal to place")
-#    parser.add_argument("--writesequential",type=int,default=0, 
-#                        help="Fill structure with H at interstices, 2 at a time, from low electronegativity to high")
-#    
-#    parser.add_argument("--mindistance",type=float,default=2.1, 
-#                        help="The minimum allowable distance between two H atoms")
-#    args = parser.parse_args()
-#    print(vars(args))
-#    hydrider(**vars(args))
+    return finalstruct

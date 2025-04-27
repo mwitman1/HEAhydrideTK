@@ -130,7 +130,7 @@ class SSHEA(object):
         if np.sum(numpts) != len(self.struct):  
             raise Exception("I messed up")
 
-        # subarrays contains the indices to assing to each element type
+        # subarrays contains the indices to assign to each element type
         subarrays = np.split(inds, np.cumsum(numpts)[:-1])
 
         # reassign the element identities based on subarrays
@@ -144,7 +144,7 @@ class SSHEA(object):
             for ind in subarrays[i]:
                 self.struct.symbols[ind] = data[i][0]
 
-        basename=None
+        basename=self.compstr+'_%s_rep%dx%dx%d_s%s'%(self.latticetype, *self.finalreps, str(seed))
         if write:
             basename = self.write_output(self.outformats, self.latticetype, seed, tag, path)
 
